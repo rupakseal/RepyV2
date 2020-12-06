@@ -1,34 +1,14 @@
-Problem Statement: https://github.com/SeattleTestbed/docs/blob/master/EducationalAssignments/ABStoragePartOne.md
+"""
+This security layer inadequately handles A/B storage for files in RepyV2.
 
-The below program creates a security layer which keeps a backup copy of a file in case it is written incorrectly.
-This is a common technique for things like firmware images where a system may not be able to recover if the file
-is written incorrectly.
 
-1. Every `correct' file starts with the character 'S' and end with the character 'E'.
-2. If any other characters (including lowercase 's', 'e', etc.) are the first or last characters,
-   then the file is considered invalid.
-3. Write Permission allowed.
-4. Stores two copies of A/B files on disk:
-   A -> Valid backup (which is used for reading)
-   B -> Used for Writing.
-5. When an app calls ABopenfile(), it opens A/B Files.
-6. When the app calls readat(), all reads are performed on the valid file A.
-7. When the app calls writeat(), all writes are performed on the invalid file B.
-8. If the app uses ABopenfile() to create a file that does not exist (by setting create=True when calling ABopenfile()),
-   the reference monitor will create a new file 'SE' in A and an empty file called B.
-9. When close() is called on the file:
-   If a file is not valid -> it is discarded.
-   If both files are valid -> the older one is discarded.
-10. The behavior of other file system calls remains unchanged.
-    This means listfiles(), removefile(), and calls to files accessed with openfile() instead of ABopenfile()
-    remain unchanged by this reference monitor.
-11. Stores the older versions of backup
 
 Note:
     This security layer uses encasementlib.r2py, restrictions.default, repy.py and Python
     Also you need to give it an application to run.
-    python repy.py restrictions.default encasementlib.r2py [security_layer].r2py [attack_program].r2py
-"""
+    python repy.py restrictions.default encasementlib.r2py [security_layer].r2py [attack_program].r2py 
+    
+    """ 
 
 TYPE="type"
 ARGS="args"
@@ -87,6 +67,7 @@ class ABFile():
       self.lock.release()
 
 #ReadAt Function - Offset and Length Validation then Read & Return ReadData
+#FIX - Removed Byte Length Validation
   def readat(self,bytes,offset):
     #Creating the Lock
     self.lock = createlock()
@@ -100,12 +81,7 @@ class ABFile():
     elif offset >= len(self.Afile.readat(None,0)):
       raise SeekPastEndOfFileError
       self.lock.release()
-    elif bytes > length and bytes != None:
-      raise SeekPastEndOfFileError
-      self.lock.release()
-    elif (len(self.Afile.readat(None,0)) < offset+length) and bytes != None:
-      raise RepyArgumentError
-      self.lock.release()
+    #FIX - Removed Byte Length Validation
     else:
       #Try Reading the File else raise Exception
       try:
@@ -129,15 +105,6 @@ class ABFile():
       removefile(self.Afn)
       openfile(backupfile,True).writeat(data,0)
       removefile(self.Bfn)
-
-      #Extra Credit - Storing Older Versions of Backup Files
-      filecount = 0
-      for file in listfiles():
-        if file.startswith(backupfile):
-          filecount = filecount + 1
-      if filecount > 0 and backup_data != data:
-        storeold = backupfile+".old"+str(filecount)
-        openfile(storeold,True).writeat(backup_data,0)
     else:
       #The Written File is Invalid -> Discard Invalid File
       self.Afile.close()
@@ -150,12 +117,15 @@ class ABFile():
 def ABopenfile(filename, create):
   return ABFile(filename,create)
 
+
+
+
 # The code here sets up type checking and variable hiding for you.  You
 # should not need to change anything below here.
 sec_file_def = {"obj-type":ABFile,
                 "name":"ABFile",
-                "writeat":{"type":"func","args":(str,(int,long)),"exceptions":Exception,"return":(int,type(None)),"target":ABFile.writeat},
-                "readat":{"type":"func","args":((int,long,type(None)),(int,long)),"exceptions":Exception,"return":str,"target":ABFile.readat},
+                "writeat":{"type":"func","args":(str,int),"exceptions":Exception,"return":(int,type(None)),"target":ABFile.writeat},
+                "readat":{"type":"func","args":((int,type(None)),(int)),"exceptions":Exception,"return":str,"target":ABFile.readat},
                 "close":{"type":"func","args":None,"exceptions":None,"return":(bool,type(None)),"target":ABFile.close}
            }
 
